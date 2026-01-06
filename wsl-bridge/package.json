@@ -1,0 +1,16 @@
+{
+  "name": "@claude-chrome-bridge/wsl-bridge",
+  "version": "1.0.0",
+  "description": "WSL MCP server for Claude Chrome Bridge - forwards browser tools to Windows",
+  "main": "src/mcp-server.js",
+  "scripts": {
+    "start": "node src/mcp-server.js"
+  },
+  "dependencies": {
+    "ws": "^8.16.0"
+  },
+  "engines": {
+    "node": ">=16.0.0"
+  },
+  "license": "MIT"
+}

@@ -1,0 +1,9 @@
+{
+  "name": "com.anthropic.claude_code_browser_extension",
+  "description": "Claude Code Chrome Bridge - Windows Native Host",
+  "path": "{{NATIVE_HOST_PATH}}",
+  "type": "stdio",
+  "allowed_origins": [
+    "chrome-extension://fcoeoabgfenejglbffodgkkbkcdhcgfn/"
+  ]
+}

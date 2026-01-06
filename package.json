@@ -1,0 +1,28 @@
+{
+  "name": "claude-code-chrome-wsl-windows",
+  "version": "1.0.0",
+  "description": "Bridge Claude Code in WSL with Chrome on Windows",
+  "private": true,
+  "workspaces": [
+    "shared",
+    "windows-host",
+    "wsl-bridge"
+  ],
+  "scripts": {
+    "build": "npm run build --workspaces",
+    "clean": "rm -rf node_modules */node_modules */dist"
+  },
+  "repository": {
+    "type": "git",
+    "url": "https://github.com/user/claude-code-chrome-wsl-windows.git"
+  },
+  "keywords": [
+    "claude",
+    "claude-code",
+    "wsl",
+    "chrome",
+    "browser-automation"
+  ],
+  "author": "",
+  "license": "MIT"
+}
