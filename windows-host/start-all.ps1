@@ -2,29 +2,25 @@
 # Run this before using browser automation in Claude Code
 #
 # Usage:
-#   .\start-all.ps1                    # Use separate debug profile (default)
-#   .\start-all.ps1 -Profile default   # Use your normal Chrome profile
-#   .\start-all.ps1 -Profile debug     # Use separate debug profile
+#   .\start-all.ps1                    # Use debug profile, kill Chrome only if needed
+#   .\start-all.ps1 -Profile debug     # Same as above
+#   .\start-all.ps1 -Profile work      # Use named profile "work"
+#   .\start-all.ps1 -NoKill            # Never kill Chrome, fail if can't start
 #
-# Note: Using "default" profile will close any existing Chrome windows
+# Profiles are stored in: %USERPROFILE%\chrome-debug-profile-<name>
 
 param(
-    [ValidateSet("default", "debug")]
-    [string]$Profile = "debug"
+    [string]$Profile = "debug",
+    [switch]$NoKill
 )
 
 $ErrorActionPreference = "SilentlyContinue"
 $ChromePath = "C:\Program Files\Google\Chrome\Application\chrome.exe"
 $HostPath = "$PSScriptRoot\src\index.js"
 
-# Set user data directory based on profile choice
-if ($Profile -eq "default") {
-    $UserDataDir = "$env:LOCALAPPDATA\Google\Chrome\User Data"
-    $ProfileName = "Default (your normal profile)"
-} else {
-    $UserDataDir = "$env:USERPROFILE\chrome-debug-profile"
-    $ProfileName = "Debug (separate profile)"
-}
+# Set user data directory based on profile name
+$UserDataDir = "$env:USERPROFILE\chrome-debug-profile-$Profile"
+$ProfileName = $Profile
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
@@ -32,6 +28,7 @@ Write-Host "  Chrome Bridge Startup" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 Write-Host "Profile: $ProfileName" -ForegroundColor Gray
+Write-Host "Data dir: $UserDataDir" -ForegroundColor DarkGray
 Write-Host ""
 
 # Check if Chrome debugging port is already active
@@ -39,13 +36,24 @@ $chromeDebug = netstat -an | findstr ":9222.*LISTENING"
 if ($chromeDebug) {
     Write-Host "[OK] Chrome already running with debugging" -ForegroundColor Green
 } else {
-    Write-Host "[..] Starting Chrome with debugging..." -ForegroundColor Yellow
+    # Check if Chrome is running without debugging
+    $chromeRunning = Get-Process -Name chrome -ErrorAction SilentlyContinue
 
-    # Kill existing Chrome to ensure clean debug startup
-    Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
-    Start-Sleep 2
+    if ($chromeRunning) {
+        if ($NoKill) {
+            Write-Host "[FAIL] Chrome is running without debugging" -ForegroundColor Red
+            Write-Host "       Close Chrome manually or run without -NoKill flag" -ForegroundColor Gray
+            exit 1
+        }
+        Write-Host "[..] Chrome running without debugging, restarting..." -ForegroundColor Yellow
+        Stop-Process -Name chrome -Force -ErrorAction SilentlyContinue
+        Start-Sleep 2
+    } else {
+        Write-Host "[..] Starting Chrome with debugging..." -ForegroundColor Yellow
+    }
 
-    Start-Process $ChromePath -ArgumentList "--remote-debugging-port=9222", "--user-data-dir=$UserDataDir"
+    $chromeArgs = @("--remote-debugging-port=9222", "--user-data-dir=`"$UserDataDir`"")
+    Start-Process $ChromePath -ArgumentList $chromeArgs
     Start-Sleep 3
 
     # Verify
