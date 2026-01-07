@@ -212,20 +212,34 @@ class CDPClient {
     }
   }
 
-  async createTab(url = 'about:blank') {
+  async createTab(url) {
     return new Promise((resolve, reject) => {
-      const req = http.get(`http://127.0.0.1:${this.port}/json/new?${url}`, (res) => {
+      // Chrome's /json/new endpoint requires PUT method
+      const endpoint = url
+        ? `/json/new?${encodeURIComponent(url)}`
+        : `/json/new`;
+
+      const options = {
+        hostname: '127.0.0.1',
+        port: this.port,
+        path: endpoint,
+        method: 'PUT'
+      };
+
+      const req = http.request(options, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
           try {
-            resolve(JSON.parse(data));
+            const result = JSON.parse(data);
+            resolve(result);
           } catch (e) {
-            reject(e);
+            reject(new Error(`Failed to create tab: ${data}`));
           }
         });
       });
       req.on('error', reject);
+      req.end();
     });
   }
 
