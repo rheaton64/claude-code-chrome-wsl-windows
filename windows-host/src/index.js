@@ -32,7 +32,9 @@ class CDPHost {
   constructor() {
     this.wsServer = new WebSocketServer(WS_PORT);
     this.cdp = new CDPClient(CDP_PORT);
-    this.wsClient = null;
+    this.clients = new Map(); // clientId -> client
+    this.requestToClient = new Map(); // requestId -> clientId
+    this.clientCounter = 0;
     this.chromeConnected = false;
   }
 
@@ -51,29 +53,32 @@ class CDPHost {
       fs.appendFileSync(EARLY_LOG, `[${new Date().toISOString()}] Chrome not available: ${e.message}\n`);
     }
 
-    // Set up WebSocket server for WSL connections
+    // Set up WebSocket server for WSL connections (supports multiple clients)
     this.wsServer.onConnection((client) => {
-      if (this.wsClient) {
-        log('warn', 'Rejecting additional WebSocket client');
-        client.close(4000, 'Only one client allowed');
-        return;
-      }
-
-      this.wsClient = client;
-      log('info', 'WSL bridge connected');
+      const clientId = ++this.clientCounter;
+      this.clients.set(clientId, client);
+      log('info', `WSL bridge connected (client ${clientId}, total: ${this.clients.size})`);
 
       client.onMessage(async (message) => {
-        log('debug', 'Received from WSL', { id: message.id, method: message.payload?.method });
+        log('debug', 'Received from WSL', { clientId, id: message.id, method: message.payload?.method });
+        // Track which client sent this request
+        this.requestToClient.set(String(message.id), clientId);
         await this.handleToolCall(message);
       });
 
       client.onClose(() => {
-        log('info', 'WSL bridge disconnected');
-        this.wsClient = null;
+        log('info', `WSL bridge disconnected (client ${clientId}, remaining: ${this.clients.size - 1})`);
+        this.clients.delete(clientId);
+        // Clean up any pending requests from this client
+        for (const [reqId, cId] of this.requestToClient) {
+          if (cId === clientId) {
+            this.requestToClient.delete(reqId);
+          }
+        }
       });
 
       client.onError((error) => {
-        log('error', 'WebSocket client error', { error: error.message });
+        log('error', `WebSocket client ${clientId} error`, { error: error.message });
       });
     });
 
@@ -334,13 +339,19 @@ class CDPHost {
   }
 
   sendResponse(id, result) {
-    log('debug', `Sending response for ${id}`, { hasResult: !!result });
-    if (!this.wsClient) {
-      log('warn', 'No WSL client to send response to');
+    const clientId = this.requestToClient.get(String(id));
+    const client = clientId ? this.clients.get(clientId) : null;
+
+    log('debug', `Sending response for ${id} to client ${clientId}`, { hasResult: !!result });
+
+    if (!client) {
+      log('warn', `No client found for request ${id}`);
       return;
     }
 
-    this.wsClient.send({
+    this.requestToClient.delete(String(id));
+
+    client.send({
       id,
       direction: 'from-chrome',
       timestamp: Date.now(),
@@ -352,9 +363,17 @@ class CDPHost {
   }
 
   sendError(id, error) {
-    if (!this.wsClient) return;
+    const clientId = this.requestToClient.get(String(id));
+    const client = clientId ? this.clients.get(clientId) : null;
 
-    this.wsClient.send({
+    if (!client) {
+      log('warn', `No client found for error response ${id}`);
+      return;
+    }
+
+    this.requestToClient.delete(String(id));
+
+    client.send({
       id,
       direction: 'from-chrome',
       timestamp: Date.now(),
