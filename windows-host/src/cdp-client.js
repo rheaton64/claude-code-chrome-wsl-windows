@@ -19,7 +19,7 @@ class CDPClient {
   // Get list of available targets (tabs) from Chrome
   async getTargets() {
     return new Promise((resolve, reject) => {
-      const req = http.get(`http://127.0.0.1:${this.port}/json/list`, (res) => {
+      const req = http.get(`http://localhost:${this.port}/json/list`, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => {
@@ -220,7 +220,7 @@ class CDPClient {
         : `/json/new`;
 
       const options = {
-        hostname: '127.0.0.1',
+        hostname: 'localhost',
         port: this.port,
         path: endpoint,
         method: 'PUT'
@@ -245,7 +245,7 @@ class CDPClient {
 
   async closeTab(targetId) {
     return new Promise((resolve, reject) => {
-      const req = http.get(`http://127.0.0.1:${this.port}/json/close/${targetId}`, (res) => {
+      const req = http.get(`http://localhost:${this.port}/json/close/${targetId}`, (res) => {
         let data = '';
         res.on('data', chunk => data += chunk);
         res.on('end', () => resolve(data));
