@@ -6,17 +6,30 @@ This project uses browser automation for E2E testing via the Chrome Bridge (WSL 
 
 ### Before Running Browser Tests
 
-**Check if the bridge is running:**
+**Always check and start the bridge automatically before E2E tests:**
+
 ```bash
-nc -zv $(ip route | grep default | awk '{print $3}') 19222
+# Step 1: Get Windows host IP
+WINDOWS_IP=$(ip route | grep default | awk '{print $3}')
+
+# Step 2: Check if bridge is running
+nc -zv $WINDOWS_IP 19222 2>&1 | grep -q "succeeded"
 ```
 
-If it shows "Connection refused", ask the user to start the bridge:
+**If the connection fails, start the bridge from WSL:**
+```bash
+# Start Chrome Bridge on Windows (run from WSL)
+powershell.exe -ExecutionPolicy Bypass -File "C:\Users\Tony\projects\claude-chrome-bridge\windows-host\start-all.ps1"
+```
 
-> **User Action Required:** Please run this command in PowerShell to start the Chrome bridge:
-> ```powershell
-> C:\Users\Tony\projects\claude-chrome-bridge\windows-host\start-all.ps1
-> ```
+**Then verify it's running:**
+```bash
+# Wait a moment for startup, then verify
+sleep 5
+nc -zv $WINDOWS_IP 19222
+```
+
+**Important:** Always run these checks automatically when E2E testing is requested. Do not ask the user to start the bridge manually - start it yourself using the powershell.exe command above.
 
 ### Available Browser Tools
 
@@ -33,6 +46,12 @@ Once the bridge is running, these MCP tools are available:
 | `mcp__claude-in-chrome__form_input` | Fill form fields | `{ref: "element-0", value: "test", tabId: "..."}` |
 
 ### E2E Test Workflow
+
+0. **Ensure bridge is running (do this automatically):**
+   ```bash
+   WINDOWS_IP=$(ip route | grep default | awk '{print $3}')
+   nc -zv $WINDOWS_IP 19222 2>&1 | grep -q "succeeded" || powershell.exe -ExecutionPolicy Bypass -File "C:\Users\Tony\projects\claude-chrome-bridge\windows-host\start-all.ps1"
+   ```
 
 1. **Get tabs and tabId:**
    ```
@@ -55,6 +74,7 @@ Once the bridge is running, these MCP tools are available:
 When asked to run E2E tests, follow this pattern:
 
 ```
+0. Check bridge connectivity, start if needed (automatic - don't ask user)
 1. Start by getting tabs (tabs_context_mcp)
 2. Navigate to the test URL
 3. Wait briefly if needed (computer action: "wait")
