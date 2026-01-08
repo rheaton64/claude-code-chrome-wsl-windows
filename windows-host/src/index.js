@@ -6,7 +6,7 @@
 const fs = require('fs');
 const path = require('path');
 
-const EARLY_LOG = 'C:\\Users\\Tony\\claude-bridge-startup.log';
+const EARLY_LOG = path.join(process.env.USERPROFILE || process.env.TEMP || 'C:\\Temp', 'claude-bridge-startup.log');
 fs.appendFileSync(EARLY_LOG, `[${new Date().toISOString()}] CDP Host starting, PID: ${process.pid}\n`);
 
 const { WebSocketServer } = require('./websocket-server');
@@ -128,6 +128,9 @@ class CDPHost {
           break;
         case 'form_input':
           result = await this.handleFormInput(args);
+          break;
+        case 'console_logs':
+          result = await this.handleConsoleLogs(args);
           break;
         default:
           throw new Error(`Unknown tool: ${toolName}`);
@@ -336,6 +339,73 @@ class CDPHost {
 
     const result = await this.cdp.executeScript(script);
     return { success: result };
+  }
+
+  async handleConsoleLogs(args) {
+    if (args.tabId) {
+      await this.cdp.connectToTarget(args.tabId);
+    } else if (!this.cdp.ws) {
+      await this.cdp.connectToTarget();
+    }
+
+    const limit = args.limit || 50;
+    const types = args.types || ['log', 'warn', 'error', 'info'];
+    const clear = args.clear || false;
+    const since = args.since || null;
+
+    // Script that installs console capture (if needed) and retrieves logs
+    const script = `
+      (function() {
+        // Install console capture if not already installed
+        if (!window.__consoleLogs) {
+          window.__consoleLogs = [];
+          const orig = { log: console.log, warn: console.warn, error: console.error, info: console.info };
+          ['log', 'warn', 'error', 'info'].forEach(method => {
+            console[method] = function(...args) {
+              window.__consoleLogs.push({
+                type: method,
+                args: args.map(a => {
+                  try {
+                    return typeof a === 'object' ? JSON.stringify(a) : String(a);
+                  } catch (e) {
+                    return String(a);
+                  }
+                }),
+                time: new Date().toISOString()
+              });
+              // Keep buffer size reasonable
+              if (window.__consoleLogs.length > 500) window.__consoleLogs.shift();
+              orig[method].apply(console, args);
+            };
+          });
+        }
+
+        // Filter and retrieve logs
+        const types = ${JSON.stringify(types)};
+        const since = ${JSON.stringify(since)};
+        const limit = ${limit};
+        const clear = ${clear};
+
+        let logs = window.__consoleLogs.filter(log => {
+          if (!types.includes(log.type)) return false;
+          if (since && log.time <= since) return false;
+          return true;
+        });
+
+        const total = logs.length;
+        const truncated = logs.length > limit;
+        logs = logs.slice(-limit);
+
+        if (clear) {
+          window.__consoleLogs = [];
+        }
+
+        return { logs, total, truncated };
+      })()
+    `;
+
+    const result = await this.cdp.executeScript(script);
+    return result;
   }
 
   sendResponse(id, result) {

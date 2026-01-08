@@ -172,6 +172,25 @@ const BROWSER_TOOLS = [
       },
       required: ['action', 'text', 'tabId']
     }
+  },
+  {
+    name: 'console_logs',
+    description: 'Read browser console output (log, warn, error, info)',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        tabId: { type: 'number', description: 'Tab ID' },
+        limit: { type: 'number', description: 'Max entries to return (default 50)' },
+        types: {
+          type: 'array',
+          items: { type: 'string', enum: ['log', 'warn', 'error', 'info'] },
+          description: 'Filter by log type (default all)'
+        },
+        clear: { type: 'boolean', description: 'Clear buffer after reading (default false)' },
+        since: { type: 'string', description: 'ISO timestamp - only return logs after this time' }
+      },
+      required: ['tabId']
+    }
   }
 ];
 
@@ -374,6 +393,17 @@ class MCPServer {
 
           if (payload.error) {
             this.sendError(payload.requestId, -32000, payload.error);
+          } else if (payload.result?.type === 'image') {
+            // Handle image responses (screenshots) as proper MCP image blocks
+            this.sendResponse(payload.requestId, {
+              content: [
+                {
+                  type: 'image',
+                  data: payload.result.data,
+                  mimeType: payload.result.mediaType
+                }
+              ]
+            });
           } else {
             this.sendResponse(payload.requestId, {
               content: [
